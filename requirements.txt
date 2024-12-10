@@ -7,8 +7,9 @@ tenacity==8.2.2
 pybase64==1.2.3
 Pillow==9.4.0
 openai==0.27.0
+PyMuPDF==1.25.0
 markdown
 numpy
-fitz
+fitz==0.0.1.dev2
 pytz
-PyMuPDF==1.25.0
+
