@@ -49,6 +49,7 @@ class Reader:
 
         # 获取某个键对应的值        
         self.chat_api_list = OPENAI_API_KEYS
+        print(OPENAI_API_KEYS)
 
         self.cur_api = 0
         self.file_format = args.file_format        
