@@ -12,3 +12,4 @@ markdown
 numpy
 fitz
 pytz
+pymupdf
