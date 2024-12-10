@@ -545,7 +545,7 @@ def main(args):
             # htmls.append("#######test#########")
             htmls_body += htmls
         save_to_file(htmls_body, date_str=title, root_path='./')
-        # make_github_issue(title=title, body="\n".join(htmls_body), labels=args.filter_keys)
+        make_github_issue(title=title, body="\n".join(htmls_body), labels=args.filter_keys)
 
 if __name__ == '__main__':    
     parser = argparse.ArgumentParser()
