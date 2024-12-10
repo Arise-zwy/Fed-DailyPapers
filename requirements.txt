@@ -11,4 +11,4 @@ markdown
 numpy
 fitz
 pytz
-PyMuPDF
+PyMuPDF==1.25.0
