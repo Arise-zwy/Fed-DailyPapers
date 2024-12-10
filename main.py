@@ -10,6 +10,7 @@ import tiktoken
 from get_paper_from_pdf import Paper
 
 from github_issue import make_github_issue
+import requests
 
 
 # os.environ["http_proxy"] = "http://127.0.0.1:8118"
@@ -56,28 +57,28 @@ class Reader:
                 
     def get_arxiv(self, max_results=30):
         # https://info.arxiv.org/help/api/user-manual.html#query_details
-        search = arxiv.Search(query=self.query,
-                              max_results=max_results,                              
-                              sort_by=self.sort,
-                              sort_order=arxiv.SortOrder.Descending,
-                              )       
-        return search
-     
+        client = arxiv.Search(
+            query=self.query,
+            max_results=max_results,
+            sort_by=self.sort,
+            sort_order=arxiv.SortOrder.Descending,
+        )
+        return client
+
     def filter_arxiv(self, max_results=30):
-        search = self.get_arxiv(max_results=max_results)
+        client = self.get_arxiv(max_results=max_results)
         print("all search:")
-        for index, result in enumerate(search.results()):
-            print(index, result.title, result.updated)
-            
-        filter_results = []   
+        filter_results = []
         filter_keys = self.filter_keys
-        
+
         print("filter_keys:", self.filter_keys)
         # 确保每个关键词都能在摘要中找到，才算是目标论文
-        for index, result in enumerate(search.results()):
+        for index, result in enumerate(client.results()):
+            print(index, result.title, result.updated)
             # 过滤不在时间范围内的论文
             if result.updated < self.filter_times_span[0] or result.updated > self.filter_times_span[1]:
-                continue 
+                continue
+            
             abs_text = result.summary.replace('-\n', '-').replace('\n', ' ')
             meet_num = 0
             for f_key in filter_keys.split(" "):
@@ -358,49 +359,104 @@ class Reader:
     @tenacity.retry(wait=tenacity.wait_exponential(multiplier=1, min=4, max=10),
                     stop=tenacity.stop_after_attempt(5),
                     reraise=True)
-    def chat_summary(self, text, summary_prompt_token = 1100):
-        openai.api_key = self.chat_api_list[self.cur_api]
-        self.cur_api += 1
-        self.cur_api = 0 if self.cur_api >= len(self.chat_api_list)-1 else self.cur_api
-        text_token = len(self.encoding.encode(text))
-        clip_text_index = int(len(text)*(self.max_token_num-summary_prompt_token)/text_token)
-        clip_text = text[:clip_text_index]
-        messages=[
-                {"role": "system", "content": "You are a researcher in the field of ["+self.key_word+"] who is good at summarizing papers using concise statements"},
-                {"role": "assistant", "content": "This is the title, author, link, abstract and introduction of an English document. I need your help to read and summarize the following questions: "+clip_text},
-                {"role": "user", "content": """                 
-                 summarize according to the following five points.Be sure to use {} answers (proper nouns need to be marked in English)
-                    - (1):What is the research background of this article?
-                    - (2):What are the past methods? What are the problems with them? What difference is the proposed approach from existing methods? How does the proposed method address the mentioned problems? Is the proposed approach well-motivated? 
-                    - (3):What is the contribution of the paper?
-                    - (4):What is the research methodology proposed in this paper?
-                    - (5):On what task and what performance is achieved by the methods in this paper? Can the performance support their goals?
-                 Follow the format of the output that follows:                    
-                 **Summary**: \n\n
-                    - (1):xxx;\n 
-                    - (2):xxx;\n 
-                    - (3):xxx;\n 
-                    - (4):xxx;\n  
-                    - (5):xxx.\n\n     
+    # def chat_summary(self, text, summary_prompt_token = 1100):
+    #     openai.api_key = self.chat_api_list[self.cur_api]
+    #     self.cur_api += 1
+    #     self.cur_api = 0 if self.cur_api >= len(self.chat_api_list)-1 else self.cur_api
+    #     text_token = len(self.encoding.encode(text))
+    #     clip_text_index = int(len(text)*(self.max_token_num-summary_prompt_token)/text_token)
+    #     clip_text = text[:clip_text_index]
+    #     messages=[
+    #             {"role": "system", "content": "You are a researcher in the field of ["+self.key_word+"] who is good at summarizing papers using concise statements"},
+    #             {"role": "assistant", "content": "This is the title, author, link, abstract and introduction of an English document. I need your help to read and summarize the following questions: "+clip_text},
+    #             {"role": "user", "content": """                 
+    #              summarize according to the following five points.Be sure to use {} answers (proper nouns need to be marked in English)
+    #                 - (1):What is the research background of this article?
+    #                 - (2):What are the past methods? What are the problems with them? What difference is the proposed approach from existing methods? How does the proposed method address the mentioned problems? Is the proposed approach well-motivated? 
+    #                 - (3):What is the contribution of the paper?
+    #                 - (4):What is the research methodology proposed in this paper?
+    #                 - (5):On what task and what performance is achieved by the methods in this paper? Can the performance support their goals?
+    #              Follow the format of the output that follows:                    
+    #              **Summary**: \n\n
+    #                 - (1):xxx;\n 
+    #                 - (2):xxx;\n 
+    #                 - (3):xxx;\n 
+    #                 - (4):xxx;\n  
+    #                 - (5):xxx.\n\n     
                  
-                 Be sure to use {} answers (proper nouns need to be marked in English), statements as concise and academic as possible, do not have too much repetitive information, numerical values using the original numbers, be sure to strictly follow the format, the corresponding content output to xxx, in accordance with \n line feed.                 
-                 """.format(self.language, self.language, self.language)},
-            ]
+    #              Be sure to use {} answers (proper nouns need to be marked in English), statements as concise and academic as possible, do not have too much repetitive information, numerical values using the original numbers, be sure to strictly follow the format, the corresponding content output to xxx, in accordance with \n line feed.                 
+    #              """.format(self.language, self.language, self.language)},
+    #         ]
                 
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=messages,
-        )
-        result = ''
-        for choice in response.choices:
-            result += choice.message.content
-        print("summary_result:\n", result)
-        print("prompt_token_used:", response.usage.prompt_tokens,
-              "completion_token_used:", response.usage.completion_tokens,
-              "total_token_used:", response.usage.total_tokens)
-        print("response_time:", response.response_ms/1000.0, 's')                    
-        return result      
+    #     response = openai.ChatCompletion.create(
+    #         model="gpt-3.5-turbo",
+    #         messages=messages,
+    #     )
+    #     result = ''
+    #     for choice in response.choices:
+    #         result += choice.message.content
+    #     print("summary_result:\n", result)
+    #     print("prompt_token_used:", response.usage.prompt_tokens,
+    #           "completion_token_used:", response.usage.completion_tokens,
+    #           "total_token_used:", response.usage.total_tokens)
+    #     print("response_time:", response.response_ms/1000.0, 's')                    
+    #     return result      
 
+    def chat_summary(self, text, summary_prompt_token=1100):
+        api_key = self.chat_api_list[self.cur_api]
+        self.cur_api += 1
+        self.cur_api = 0 if self.cur_api >= len(self.chat_api_list) - 1 else self.cur_api
+        text_token = len(self.encoding.encode(text))
+        clip_text_index = int(len(text) * (self.max_token_num - summary_prompt_token) / text_token)
+        clip_text = text[:clip_text_index]
+        messages = [
+            {"role": "system", "content": "You are a researcher in the field of [" + self.key_word + "] who is good at summarizing papers using concise statements"},
+            {"role": "assistant", "content": "This is the title, author, link, abstract and introduction of an English document. I need your help to read and summarize the following questions: " + clip_text},
+            {"role": "user", "content": """
+                    summarize according to the following five points.Be sure to use {} answers (proper nouns need to be marked in English)
+                        - (1):What is the research background of this article?
+                        - (2):What are the past methods? What are the problems with them? What difference is the proposed approach from existing methods? How does the proposed method address the mentioned problems? Is the proposed approach well-motivated? 
+                        - (3):What is the contribution of the paper?
+                        - (4):What is the research methodology proposed in this paper?
+                        - (5):On what task and what performance is achieved by the methods in this paper? Can the performance support their goals?
+                    Follow the format of the output that follows:                    
+                    **Summary**: \n\n
+                        - (1):xxx;\n 
+                        - (2):xxx;\n 
+                        - (3):xxx;\n 
+                        - (4):xxx;\n  
+                        - (5):xxx.\n\n     
+                    
+                    Be sure to use {} answers (proper nouns need to be marked in English), statements as concise and academic as possible, do not have too much repetitive information, numerical values using the original numbers, be sure to strictly follow the format, the corresponding content output to xxx, in accordance with \n line feed.                 
+                    """.format(self.language, self.language, self.language)},
+        ]
+
+        headers = {
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json'
+        }
+
+        data = {
+            'model': 'gpt-3.5-turbo',
+            'messages': messages,
+            'temperature': 0.7
+        }
+
+        response = requests.post('https://api.chatanywhere.tech/v1/chat/completions', headers=headers, json=data)
+        response_json = response.json()
+
+        result = ''
+        for choice in response_json['choices']:
+            result += choice['message']['content']
+        
+        print("summary_result:\n", result)
+        print("prompt_token_used:", response_json['usage']['prompt_tokens'],
+            "completion_token_used:", response_json['usage']['completion_tokens'],
+            "total_token_used:", response_json['usage']['total_tokens'])
+        print("response_time:", response.elapsed.total_seconds(), 's')
+        
+        return result
+    
     # 定义一个方法，打印出读者信息
     def show_info(self):        
         print(f"Key word: {self.key_word}")
@@ -489,13 +545,13 @@ def main(args):
             # htmls.append("#######test#########")
             htmls_body += htmls
         save_to_file(htmls_body, date_str=title, root_path='./')
-        make_github_issue(title=title, body="\n".join(htmls_body), labels=args.filter_keys)
+        # make_github_issue(title=title, body="\n".join(htmls_body), labels=args.filter_keys)
 
 if __name__ == '__main__':    
     parser = argparse.ArgumentParser()
     parser.add_argument("--pdf_path", type=str, default='', help="if none, the bot will download from arxiv with query")
     parser.add_argument("--query", type=str, default='all:remote AND all:sensing', help="the query string, ti: xx, au: xx, all: xx,") 
-    parser.add_argument("--key_word", type=str, default='remote sensing', help="the key word of user research fields")
+    parser.add_argument("--key_word", type=str, default='Federated learning', help="the key word of user research fields")
     parser.add_argument("--filter_keys", type=list, default=KEYWORD_LIST, help="the filter key words, 摘要中每个单词都得有，才会被筛选为目标论文")
     parser.add_argument("--filter_times_span", type=int, default=1.1, help='how many days of files to be filtered.')
     parser.add_argument("--max_results", type=int, default=20, help="the maximum number of results")

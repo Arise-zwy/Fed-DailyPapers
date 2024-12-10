@@ -8,33 +8,62 @@ import json
 import requests
 from config import USERNAME, TOKEN, REPO_OWNER, REPO_NAME
 
-def make_github_issue(title, body=None, assignee=USERNAME, closed=False, labels=[]):
+def make_github_issue(title, body=None, assignee=None, closed=False, labels=[]):
     # Create an issue on github.com using the given parameters
-    # Url to create issues via POST
-    url = 'https://api.github.com/repos/%s/%s/import/issues' % (REPO_OWNER, REPO_NAME)
+    url = 'https://api.github.com/repos/%s/%s/issues' % (REPO_OWNER, REPO_NAME)
 
     # Headers
     headers = {
         "Authorization": "token %s" % TOKEN,
-        "Accept": "application/vnd.github.golden-comet-preview+json"
+        "Accept": "application/vnd.github.v3+json"
     }
 
     # Create our issue
-    data = {'issue': {'title': title,
-                      'body': body,
-                      'assignee': assignee,
-                      'closed': closed,
-                      'labels': labels}}
+    data = {
+        'title': title,
+        'body': body,
+        'assignee': assignee,
+        'state': 'closed' if closed else 'open',
+        'labels': labels
+    }
 
     payload = json.dumps(data)
 
     # Add the issue to our repository
-    response = requests.request("POST", url, data=payload, headers=headers)
-    if response.status_code == 202:
-        print ('Successfully created Issue "%s"' % title)
+    response = requests.post(url, data=payload, headers=headers)
+    if response.status_code == 201:
+        print('Successfully created Issue "%s"' % title)
     else:
-        print ('Could not create Issue "%s"' % title)
-        print ('Response:', response.content)
+        print('Could not create Issue "%s"' % title)
+        print('Response:', response.content)
+        
+# def make_github_issue(title, body=None, assignee=USERNAME, closed=False, labels=[]):
+#     # Create an issue on github.com using the given parameters
+#     # Url to create issues via POST
+#     url = 'https://api.github.com/repos/%s/%s/import/issues' % (REPO_OWNER, REPO_NAME)
+
+#     # Headers
+#     headers = {
+#         "Authorization": "token %s" % TOKEN,
+#         "Accept": "application/vnd.github.golden-comet-preview+json"
+#     }
+
+#     # Create our issue
+#     data = {'issue': {'title': title,
+#                       'body': body,
+#                       'assignee': assignee,
+#                       'closed': closed,
+#                       'labels': labels}}
+
+#     payload = json.dumps(data)
+
+#     # Add the issue to our repository
+#     response = requests.request("POST", url, data=payload, headers=headers)
+#     if response.status_code == 202:
+#         print ('Successfully created Issue "%s"' % title)
+#     else:
+#         print ('Could not create Issue "%s"' % title)
+#         print ('Response:', response.content)
 
 if __name__ == '__main__':
     title = 'Pretty title'
