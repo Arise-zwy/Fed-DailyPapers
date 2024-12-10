@@ -20,5 +20,5 @@ NEW_SUB_URL = 'https://arxiv.org/list/cs/new'
 KEYWORD_LIST = ["Federated", ]
 
 
-OPENAI_API_KEYS = os.getenv('OPENAI_API_KEYS')
+OPENAI_API_KEYS = [str(os.getenv('OPENAI_API_KEYS'))]
 LANGUAGE = "zh"  # zh | en
